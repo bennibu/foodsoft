@@ -35,7 +35,7 @@ gem 'simple-navigation', '~> 3.14.0' # 3.x for simple_navigation_bootstrap
 gem 'simple-navigation-bootstrap'
 gem 'ransack'
 gem 'acts_as_tree'
-gem 'rails-settings-cached'
+gem 'rails-settings-cached', '= 0.4.4' # cached reads introduced in 0.4.5 break config specs
 gem 'resque'
 gem 'whenever', require: false # For defining cronjobs, see config/schedule.rb
 gem 'protected_attributes', '= 1.1.0' # 1.1.0 until tests work work with higher versions
