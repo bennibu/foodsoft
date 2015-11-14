@@ -6,7 +6,7 @@ feature 'product distribution', js: true do
   let(:user_b) { create :user, groups: [create(:ordergroup)] }
   let(:supplier) { create :supplier }
   let(:article) { create :article, supplier: supplier, unit_quantity: 5 }
-  let(:order) { create(:order, supplier: supplier, article_ids: [article.id]) }
+  let!(:order) { create(:order, supplier: supplier, article_ids: [article.id]) }
   let(:oa) { order.order_articles.first }
 
   before do
@@ -15,30 +15,44 @@ feature 'product distribution', js: true do
       ordergroup = Ordergroup.find(user.ordergroup.id)
       ordergroup.add_financial_transaction! 5000, 'for ordering', admin
     end
-    order # make sure order is referenced
+  end
+
+  def order_member(user, url, &block)
+    # visit the (ordering page) for the user
+    login user
+    visit url
+    # somehow the button cannot be pressed by capybara unless we scroll
+    # http://stackoverflow.com/a/11048669/2866660
+    page.execute_script "window.scrollBy(0,500)"
+    # change member order
+    block.call
+    # and submit
+    find('input[type=submit]').click
+    expect(page).to have_selector('body')
+  end
+
+  def expect_price(price)
+    expect(find('#total_price')).to have_content(price.round(2))
   end
 
   it 'agrees to documented example' do
     # gruppe a bestellt 2(3), weil sie auf jeden fall was von x bekommen will
-    login user_a
-    visit new_group_order_path(order_id: order.id)
-    2.times { find("[data-increase_quantity='#{oa.id}']").click }
-    3.times { find("[data-increase_tolerance='#{oa.id}']").click }
-    find('input[type=submit]').click
-    expect(page).to have_selector('body')
+    order_member user_a, new_group_order_path(order_id: order.id) do
+      2.times { find("[data-increase_quantity='#{oa.id}']").click }
+      3.times { find("[data-increase_tolerance='#{oa.id}']").click }
+      expect_price oa.price.fc_price*2
+    end
     # gruppe b bestellt 2(0)
-    login user_b
-    visit new_group_order_path(order_id: order.id)
-    2.times { find("[data-increase_quantity='#{oa.id}']").click }
-    find('input[type=submit]').click
-    expect(page).to have_selector('body')
+    order_member user_b, new_group_order_path(order_id: order.id) do
+      2.times { find("[data-increase_quantity='#{oa.id}']").click }
+      expect_price oa.price.fc_price*2
+    end
     # gruppe a faellt ein dass sie doch noch mehr braucht von x und aendert auf 4(1).
-    login user_a
-    visit edit_group_order_path(id: order.group_order(user_a.ordergroup).id, order_id: order.id)
-    2.times { find("[data-increase_quantity='#{oa.id}']").click }
-    2.times { find("[data-decrease_tolerance='#{oa.id}']").click }
-    find('input[type=submit]').click
-    expect(page).to have_selector('body')
+    order_member user_a, edit_group_order_path(id: order.group_order(user_a.ordergroup).id, order_id: order.id) do
+      2.times { find("[data-increase_quantity='#{oa.id}']").click }
+      2.times { find("[data-decrease_tolerance='#{oa.id}']").click }
+      expect_price oa.price.fc_price*4
+    end
     # die zuteilung
     order.finish!(admin)
     oa.reload
